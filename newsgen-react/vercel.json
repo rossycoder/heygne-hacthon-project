@@ -1,5 +1,6 @@
 {
   "rewrites": [
+    { "source": "/api/:path*", "destination": "https://rozeena123-newsgen-ai.hf.space/api/:path*" },
     { "source": "/(.*)", "destination": "/" }
   ]
 }
