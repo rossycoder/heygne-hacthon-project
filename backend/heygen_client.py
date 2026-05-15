@@ -41,6 +41,18 @@ async def list_videos(limit: int = 20) -> list:
 
 async def upload_asset(file_bytes, media_type, filename):
     # HeyGen uses a separate upload domain
+    # Ensure filename extension matches the actual content type
+    ext_map = {
+        "image/jpeg": ".jpg", "image/png": ".png", "image/webp": ".webp",
+        "audio/mpeg": ".mp3", "audio/wav": ".wav", "audio/ogg": ".ogg",
+        "audio/mp4": ".mp4", "audio/webm": ".webm",
+    }
+    ext = ext_map.get(media_type, "")
+    if ext and not filename.lower().endswith(ext):
+        # Strip old extension and add correct one
+        base = filename.rsplit(".", 1)[0] if "." in filename else filename
+        filename = f"{base}{ext}"
+
     upload_headers = {
         "x-api-key": os.getenv("HEYGEN_API_KEY", ""),
         "Content-Type": media_type,
