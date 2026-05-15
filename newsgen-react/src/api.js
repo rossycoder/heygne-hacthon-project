@@ -131,3 +131,14 @@ export async function deleteBroadcast(broadcastId) {
   if (!res.ok) throw new Error(`Delete error ${res.status}`)
   return res.json()
 }
+
+/**
+ * Poll HeyGen video status.
+ * Returns { video_id, status, video_url, error }
+ * status: 'processing' | 'completed' | 'failed'
+ */
+export async function checkVideoStatus(videoId) {
+  const res = await fetch(`${BASE}/video-status/${videoId}`)
+  if (!res.ok) throw new Error(`Status check error ${res.status}`)
+  return res.json()
+}

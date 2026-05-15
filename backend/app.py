@@ -16,6 +16,7 @@ from heygen_client import (
     create_avatar_video, create_image_video,
     translate_video, upload_asset, list_avatars, list_voices,
     clone_voice_from_asset, list_videos,
+    submit_avatar_video, submit_image_video, get_video_status,
 )
 from live_news import fetch_live_news
 from broadcast_history import (
@@ -69,6 +70,8 @@ class BroadcastRequest(BaseModel):
 class BroadcastResponse(BaseModel):
     script: str
     video_url: str = ""
+    video_id: str = ""        # HeyGen video_id for async polling
+    status: str = "complete"  # "pending" | "complete"
     news_stories: list[dict]
     news_count: int
     detected_language: str
@@ -140,9 +143,10 @@ async def generate_broadcast(req: BroadcastRequest):
     lang_code = LANGUAGE_CODES[language]
 
     # Check if we have a similar broadcast in history to save API costs
+    # Only reuse if avatar_id also matches (so changing avatar generates a new video)
     if not req.script_only and not req.custom_script:
         await update_progress(session_id, "checking", 10, "Checking for existing broadcasts...")
-        similar_broadcast = find_similar_broadcast(req.name, req.city, language, req.topics)
+        similar_broadcast = find_similar_broadcast(req.name, req.city, language, req.topics, req.avatar_id)
         
         if similar_broadcast:
             await update_progress(session_id, "found", 100, "Found existing broadcast!")
@@ -180,66 +184,41 @@ async def generate_broadcast(req: BroadcastRequest):
             session_id=session_id,
         )
 
-    # Step 3: Generate video
-    await update_progress(session_id, "video", 55, "Creating video with AI avatar...")
+    # Step 3: Submit video to HeyGen (no polling — frontend polls /api/video-status)
+    await update_progress(session_id, "video", 55, "Submitting video to HeyGen...")
     
     try:
+        _INVALID_AVATARS = {"Anna_public_3", "Daisy-inskirt-20220818", "Tyler-incasualsuit-20220721",
+                            "Eric_public_pro1", "Susan_public_2_20240328", "Justin_public_pro2_20230714",
+                            "Sarah_professional", "Emma_business", "Sophia_casual",
+                            "Michael_suit", "James_blue", "David_casual",
+                            "Alex_formal", "Ryan_professional", "Priya_anchor", "Ahmed_news"}
+
         if req.anchor_mode == "photo" and req.image_asset_id:
-            video_result = await create_image_video(
+            video_id = await submit_image_video(
                 script=script,
                 image_asset_id=req.image_asset_id,
                 voice_id=req.voice_id,
                 burn_captions=req.burn_captions,
-                progress_callback=lambda p, m: asyncio.create_task(update_progress(session_id, "video", 55 + int(p * 0.35), m))
             )
         else:
-            # Use user-selected avatar — only block known-broken IDs
-            _INVALID_AVATARS = {"Anna_public_3", "Daisy-inskirt-20220818", "Tyler-incasualsuit-20220721",
-                                "Eric_public_pro1", "Susan_public_2_20240328", "Justin_public_pro2_20230714",
-                                # Our fake mock avatar IDs
-                                "Sarah_professional", "Emma_business", "Sophia_casual",
-                                "Michael_suit", "James_blue", "David_casual",
-                                "Alex_formal", "Ryan_professional", "Priya_anchor", "Ahmed_news"}
             safe_avatar_id = req.avatar_id if req.avatar_id and req.avatar_id not in _INVALID_AVATARS else None
-            video_result = await create_avatar_video(
+            video_id = await submit_avatar_video(
                 script=script,
                 language=language,
                 avatar_id=safe_avatar_id,
                 voice_id=req.voice_id,
                 burn_captions=req.burn_captions,
-                progress_callback=lambda p, m: asyncio.create_task(update_progress(session_id, "video", 55 + int(p * 0.35), m))
             )
 
-        await update_progress(session_id, "video", 90, "Video generated successfully")
+        await update_progress(session_id, "video", 70, "Video submitted! Rendering in progress...")
 
-        # Step 4: Translate if non-English (skip if network unavailable)
-        final_url = video_result["video_url"]
-        if lang_code != "en":
-            try:
-                await update_progress(session_id, "translate", 92, "Translating video...")
-                translated = await translate_video(video_result["video_id"], lang_code)
-                final_url  = translated["video_url"]
-                await update_progress(session_id, "translate", 98, "Translation complete")
-            except Exception as te:
-                print(f"Translation skipped (network issue): {te}")
-                await update_progress(session_id, "translate", 98, "Translation skipped, using original video")
-
-        # Save to history immediately after video is ready
-        await update_progress(session_id, "saving", 99, "Saving broadcast...")
-        try:
-            save_broadcast(
-                name=req.name, city=req.city, language=language,
-                script=script, video_url=final_url,
-                news_stories=news_stories, avatar_id=req.avatar_id, topics=req.topics
-            )
-        except Exception as se:
-            print(f"History save failed (non-critical): {se}")
-
-        await update_progress(session_id, "complete", 100, "Broadcast ready!")
-
+        # Return immediately — frontend polls /api/video-status/{video_id}
         return BroadcastResponse(
             script=script,
-            video_url=final_url,
+            video_url="",
+            video_id=video_id,
+            status="pending",
             news_stories=news_stories,
             news_count=len(news_stories),
             detected_language=language,
@@ -441,3 +420,45 @@ async def delete_broadcast_endpoint(broadcast_id: str):
     if not success:
         raise HTTPException(status_code=404, detail="Broadcast not found")
     return {"message": "Broadcast deleted successfully"}
+
+# ── Video status polling ───────────────────────────────────────────────────
+
+@app.get("/api/video-status/{video_id}")
+async def check_video_status(video_id: str):
+    """
+    Poll HeyGen for video status.
+    Returns { video_id, status, video_url, error }
+    status: 'processing' | 'completed' | 'failed'
+    """
+    try:
+        result = await get_video_status(video_id)
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+class SaveVideoRequest(BaseModel):
+    name: str
+    city: str
+    language: str
+    script: str
+    video_url: str
+    news_stories: list[dict] = []
+    video_id: str = ""
+    avatar_id: Optional[str] = None
+    topics: Optional[list[str]] = None
+
+
+@app.post("/api/broadcasts/save-video")
+async def save_video_to_history(req: SaveVideoRequest):
+    """Called by frontend after polling confirms video is ready. Saves to history."""
+    try:
+        broadcast_id = save_broadcast(
+            name=req.name, city=req.city, language=req.language,
+            script=req.script, video_url=req.video_url,
+            news_stories=req.news_stories, avatar_id=req.avatar_id,
+            topics=req.topics or []
+        )
+        return {"broadcast_id": broadcast_id, "saved": True}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))

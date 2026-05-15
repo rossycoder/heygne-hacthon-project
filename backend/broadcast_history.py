@@ -92,33 +92,37 @@ def delete_broadcast(broadcast_id: str) -> bool:
         return True
     return False
 
-def find_similar_broadcast(name: str, city: str, language: str, topics: List[str] = None) -> Optional[Dict]:
+def find_similar_broadcast(name: str, city: str, language: str, topics: List[str] = None, avatar_id: Optional[str] = None) -> Optional[Dict]:
     """
-    Find a similar broadcast to avoid regenerating
-    Matches by name, city, language and similar topics
+    Find a similar broadcast to avoid regenerating.
+    Matches by name, city, language, avatar_id, and similar topics.
+    Avatar must match so changing avatar always generates a new video.
     """
     history = _load_history()
     topics = topics or []
     
     for broadcast in history:
-        # Check if basic parameters match
-        if (broadcast.get('name', '').lower() == name.lower() and
-            broadcast.get('city', '').lower() == city.lower() and
-            broadcast.get('language', '').lower() == language.lower()):
-            
-            # Check topic similarity (at least 70% overlap)
-            broadcast_topics = set(t.lower() for t in broadcast.get('topics', []))
-            request_topics = set(t.lower() for t in topics)
-            
-            if not topics or not broadcast_topics:
-                # If no topics specified, consider it a match
-                return broadcast
-            
-            # Calculate topic overlap
-            overlap = len(broadcast_topics.intersection(request_topics))
-            total = len(broadcast_topics.union(request_topics))
-            
-            if total == 0 or overlap / total >= 0.7:
-                return broadcast
+        # Basic parameters must match
+        if (broadcast.get('name', '').lower() != name.lower() or
+            broadcast.get('city', '').lower() != city.lower() or
+            broadcast.get('language', '').lower() != language.lower()):
+            continue
+
+        # Avatar must match (None == None is fine, but different avatars = different video)
+        if broadcast.get('avatar_id') != avatar_id:
+            continue
+
+        # Check topic similarity (at least 70% overlap)
+        broadcast_topics = set(t.lower() for t in broadcast.get('topics', []))
+        request_topics = set(t.lower() for t in topics)
+        
+        if not topics or not broadcast_topics:
+            return broadcast
+        
+        overlap = len(broadcast_topics.intersection(request_topics))
+        total = len(broadcast_topics.union(request_topics))
+        
+        if total == 0 or overlap / total >= 0.7:
+            return broadcast
     
     return None

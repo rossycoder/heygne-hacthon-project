@@ -1,8 +1,9 @@
 import { useLocation, useNavigate } from 'react-router-dom'
-import { useEffect } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import Navbar from '../components/Navbar'
 import NewsTicker from '../components/NewsTicker'
 import ShareBroadcast from '../components/ShareBroadcast'
+import { checkVideoStatus, getBroadcastHistory } from '../api'
 import './BroadcastPage.css'
 
 const CATEGORY_COLORS = {
@@ -15,8 +16,69 @@ export default function BroadcastPage() {
   const { state } = useLocation()
   const navigate  = useNavigate()
 
+  const [videoUrl, setVideoUrl]     = useState(state?.data?.video_url || '')
+  const [videoReady, setVideoReady] = useState(!!state?.data?.video_url)
+  const [pollMsg, setPollMsg]       = useState('')
+  const [pollError, setPollError]   = useState('')
+  const pollRef = useRef(null)
+
   useEffect(() => {
-    if (!state?.data) navigate('/', { replace: true })
+    if (!state?.data) { navigate('/', { replace: true }); return }
+
+    const videoId = state.data.video_id
+    const isPending = state.data.status === 'pending' && videoId && !state.data.video_url
+
+    if (!isPending) return
+
+    // Start polling every 5 seconds
+    setPollMsg('⏳ Your video is rendering on HeyGen...')
+    let attempts = 0
+    const MAX = 120  // 10 minutes max
+
+    pollRef.current = setInterval(async () => {
+      attempts++
+      try {
+        const result = await checkVideoStatus(videoId)
+
+        if (result.status === 'completed' && result.video_url) {
+          clearInterval(pollRef.current)
+          setVideoUrl(result.video_url)
+          setVideoReady(true)
+          setPollMsg('✅ Your video is ready!')
+          // Save to broadcast history
+          try {
+            await fetch('/api/broadcasts/save-video', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                name: state.name, city: state.city, language: state.language,
+                script: state.data.script, video_url: result.video_url,
+                news_stories: state.data.news_stories || [],
+                video_id: videoId,
+              })
+            })
+          } catch (_) {}
+        } else if (result.status === 'failed') {
+          clearInterval(pollRef.current)
+          setPollError(`Video generation failed: ${result.error || 'Unknown error'}`)
+          setPollMsg('')
+        } else {
+          const mins = Math.floor((attempts * 5) / 60)
+          const secs = (attempts * 5) % 60
+          setPollMsg(`⏳ Rendering... ${mins > 0 ? `${mins}m ` : ''}${secs}s elapsed`)
+        }
+      } catch (err) {
+        console.warn('Poll error:', err)
+      }
+
+      if (attempts >= MAX) {
+        clearInterval(pollRef.current)
+        setPollError('Video is taking too long. Check HeyGen dashboard.')
+        setPollMsg('')
+      }
+    }, 5000)
+
+    return () => clearInterval(pollRef.current)
   }, [state, navigate])
 
   if (!state?.data) return null
@@ -36,17 +98,33 @@ export default function BroadcastPage() {
         {/* Left: video player */}
         <section className="broadcast__player" aria-label="News broadcast video">
           <div className="player-wrap">
-            {data.video_url ? (
-              <video className="player-video" src={data.video_url}
+            {videoUrl ? (
+              <video className="player-video" src={videoUrl}
                 controls autoPlay playsInline
                 aria-label={`Personalized news broadcast for ${name}`} />
             ) : (
               <div className="player-placeholder">
-                <div className="player-placeholder__icon">📺</div>
-                <p>Your broadcast is ready</p>
+                <div className="player-placeholder__icon">
+                  {pollError ? '❌' : '🎬'}
+                </div>
+                {pollError ? (
+                  <p className="poll-error">{pollError}</p>
+                ) : (
+                  <>
+                    <p className="poll-msg">{pollMsg || 'Preparing your broadcast...'}</p>
+                    <div className="poll-spinner" aria-label="Loading" />
+                    <p className="poll-hint">You can leave this page — come back to Broadcast History when ready.</p>
+                  </>
+                )}
               </div>
             )}
           </div>
+
+          {videoReady && (
+            <div className="video-ready-banner" role="status">
+              🎉 Your video is ready!
+            </div>
+          )}
 
           <div className="player-meta">
             <div className="player-meta__name">
@@ -56,28 +134,20 @@ export default function BroadcastPage() {
             <div className="player-meta__date">{dateStr} · {timeStr}</div>
           </div>
 
-          {/* Action buttons */}
           <div className="player-actions">
-            {data.video_url && (
+            {videoUrl && (
               <a className="btn-download"
-                href={data.video_url}
+                href={videoUrl}
                 download={`newsgen-${name.toLowerCase().replace(/\s+/g, '-')}.mp4`}>
                 ⬇ Download
               </a>
             )}
           </div>
 
-          {/* Share bar */}
-          {data.video_url && (
-            <ShareBroadcast
-              videoUrl={data.video_url}
-              name={name}
-              city={city}
-              language={language}
-            />
+          {videoUrl && (
+            <ShareBroadcast videoUrl={videoUrl} name={name} city={city} language={language} />
           )}
 
-          {/* Script preview */}
           {data.script && (
             <details className="script-preview">
               <summary className="script-preview__toggle">📝 View Script</summary>
@@ -118,7 +188,6 @@ export default function BroadcastPage() {
         </aside>
       </div>
 
-      {/* Stats bar */}
       <footer className="broadcast__stats" aria-label="Broadcast statistics">
         <div className="stat">
           <span className="stat__val">{stories.length || data.news_count || '—'}</span>

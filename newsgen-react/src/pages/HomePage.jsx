@@ -93,7 +93,6 @@ export default function HomePage() {
   }
 
   async function handleGenerateVideo(finalScript) {
-    // Generate session ID upfront so LoadingScreen can connect to SSE immediately
     const sid = crypto.randomUUID()
     setSessionId(sid)
     setVideoLoading(true); setError(''); setStep(4)
@@ -105,8 +104,14 @@ export default function HomePage() {
         burnCaptions: anchor.burnCaptions, customScript: finalScript,
         sessionId: sid,
       })
+      // Navigate immediately — BroadcastPage will poll if status === 'pending'
       navigate('/broadcast', {
-        state: { data, name: name.trim(), city: city.trim(), language: data.detected_language || language }
+        state: {
+          data,
+          name: name.trim(),
+          city: city.trim(),
+          language: data.detected_language || language,
+        }
       })
     } catch (err) {
       setError(err.message || 'Video generation failed.')

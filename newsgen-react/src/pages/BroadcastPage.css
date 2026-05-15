@@ -219,3 +219,49 @@
   color: #a0a0be;
   white-space: pre-wrap;
 }
+
+/* ── Video polling states ─────────────────────────────────────────────── */
+.poll-msg {
+  color: #a0a0be;
+  font-size: 0.9rem;
+  margin: 0.5rem 0;
+}
+
+.poll-hint {
+  color: #505068;
+  font-size: 0.75rem;
+  margin-top: 0.75rem;
+}
+
+.poll-error {
+  color: #f87171;
+  font-size: 0.85rem;
+  margin: 0.5rem 0;
+}
+
+.poll-spinner {
+  width: 36px;
+  height: 36px;
+  border: 3px solid rgba(255,255,255,.1);
+  border-top-color: #e24b4a;
+  border-radius: 50%;
+  animation: spin 0.9s linear infinite;
+  margin: 1rem auto;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.video-ready-banner {
+  background: linear-gradient(90deg, #22c55e22, #22c55e44);
+  border: 1px solid #22c55e66;
+  color: #4ade80;
+  text-align: center;
+  padding: 0.6rem 1rem;
+  border-radius: 8px;
+  font-weight: 600;
+  font-size: 0.9rem;
+  margin-bottom: 0.75rem;
+  animation: fadeUp .4s ease;
+}

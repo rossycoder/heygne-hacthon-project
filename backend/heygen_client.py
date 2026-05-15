@@ -236,6 +236,93 @@ async def create_image_video(script, image_asset_id, voice_id=None, burn_caption
     return await _poll_video_status(video_id, progress_callback)
 
 
+async def get_video_status(video_id: str) -> dict:
+    """Check HeyGen video status. Returns { status, video_url, error }"""
+    async with httpx.AsyncClient(timeout=15.0) as client:
+        resp = await client.get(
+            f"{BASE}/v1/video_status.get",
+            params={"video_id": video_id},
+            headers=_headers(),
+        )
+        _raise_for_heygen_error(resp, "get video status")
+        data = resp.json()["data"]
+        return {
+            "video_id":  video_id,
+            "status":    data.get("status", "processing"),   # processing | completed | failed
+            "video_url": data.get("video_url", ""),
+            "error":     data.get("error", ""),
+        }
+
+
+async def submit_avatar_video(script, language, avatar_id=None, voice_id=None, burn_captions=False) -> str:
+    """Submit video to HeyGen and return video_id immediately (no polling)."""
+    _avatar_id = avatar_id or os.getenv("HEYGEN_AVATAR_ID", "Abigail_standing_office_front")
+    _voice_id  = voice_id or ""
+
+    fallback_avatars = [
+        "Abigail_standing_office_front",
+        "Abigail_sitting_sofa_front",
+        "Aditya_public_4",
+    ]
+
+    payload = {
+        "type": "avatar",
+        "title": "NewsGen Broadcast",
+        "avatar_id": _avatar_id,
+        "script": script,
+        "voice_id": _voice_id,
+        "voice_settings": {"speed": 1.1},
+        "resolution": "720p",
+        "aspect_ratio": "16:9",
+        "background": {"type": "color", "value": "#0d0d1a"},
+    }
+    if burn_captions:
+        payload["caption"] = {"file_format": "srt", "style": "default"}
+
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        resp = await client.post(f"{BASE}/v3/videos", json=payload, headers=_headers())
+
+        if resp.status_code in [400, 404]:
+            try:
+                msg = resp.json().get("error", {}).get("message", "") or resp.text
+            except Exception:
+                msg = resp.text
+            if "Avatar IV" in msg or "does not support" in msg or "not found" in msg.lower():
+                for fallback in fallback_avatars:
+                    if fallback == _avatar_id:
+                        continue
+                    payload["avatar_id"] = fallback
+                    resp = await client.post(f"{BASE}/v3/videos", json=payload, headers=_headers())
+                    if resp.status_code == 200:
+                        break
+                    await asyncio.sleep(0.5)
+
+        _raise_for_heygen_error(resp, "submit avatar video")
+        return resp.json()["data"]["video_id"]
+
+
+async def submit_image_video(script, image_asset_id, voice_id=None, burn_captions=False) -> str:
+    """Submit image-based video and return video_id immediately."""
+    payload = {
+        "type": "image",
+        "title": "NewsGen Custom Anchor",
+        "image": {"type": "asset_id", "asset_id": image_asset_id},
+        "script": script,
+        "voice_id": voice_id or "",
+        "voice_settings": {"speed": 1.0},
+        "resolution": "1080p",
+        "aspect_ratio": "16:9",
+        "expressiveness": "medium",
+    }
+    if burn_captions:
+        payload["caption"] = {"file_format": "srt", "style": "default"}
+
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        resp = await client.post(f"{BASE}/v3/videos", json=payload, headers=_headers())
+        _raise_for_heygen_error(resp, "submit image video")
+        return resp.json()["data"]["video_id"]
+
+
 async def _poll_video_status(video_id, progress_callback=None, max_attempts=100):
     async with httpx.AsyncClient(timeout=15.0) as client:
         for attempt in range(max_attempts):
