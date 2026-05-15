@@ -51,10 +51,15 @@ export default function BroadcastPage() {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
-                name: state.name, city: state.city, language: state.language,
-                script: state.data.script, video_url: result.video_url,
+                name: state.name,
+                city: state.city,
+                language: state.language,
+                script: state.data.script,
+                video_url: result.video_url,
                 news_stories: state.data.news_stories || [],
                 video_id: videoId,
+                avatar_id: null,
+                topics: [],
               })
             })
           } catch (_) {}

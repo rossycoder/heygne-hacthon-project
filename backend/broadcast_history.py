@@ -36,11 +36,12 @@ def save_broadcast(
     video_url: str,
     news_stories: List[Dict],
     avatar_id: Optional[str] = None,
-    topics: Optional[List[str]] = None
+    topics: Optional[List[str]] = None,
+    video_id: Optional[str] = None,
 ) -> str:
     """
-    Save a completed broadcast to history
-    Returns the broadcast ID
+    Save a completed broadcast to history.
+    Returns the broadcast ID.
     """
     history = _load_history()
     
@@ -53,6 +54,7 @@ def save_broadcast(
         "language": language,
         "topics": topics or [],
         "avatar_id": avatar_id,
+        "video_id": video_id or "",
         "script": script,
         "video_url": video_url,
         "news_stories": news_stories,

@@ -255,15 +255,11 @@ async def get_video_status(video_id: str) -> dict:
 
 
 async def submit_avatar_video(script, language, avatar_id=None, voice_id=None, burn_captions=False) -> str:
-    """Submit video to HeyGen and return video_id immediately (no polling)."""
+    """Submit video to HeyGen and return video_id immediately (no polling).
+    Uses selected avatar directly — only falls back if HeyGen explicitly rejects it.
+    """
     _avatar_id = avatar_id or os.getenv("HEYGEN_AVATAR_ID", "Abigail_standing_office_front")
     _voice_id  = voice_id or ""
-
-    fallback_avatars = [
-        "Abigail_standing_office_front",
-        "Abigail_sitting_sofa_front",
-        "Aditya_public_4",
-    ]
 
     payload = {
         "type": "avatar",
@@ -282,22 +278,29 @@ async def submit_avatar_video(script, language, avatar_id=None, voice_id=None, b
     async with httpx.AsyncClient(timeout=30.0) as client:
         resp = await client.post(f"{BASE}/v3/videos", json=payload, headers=_headers())
 
+        # Only fallback if HeyGen explicitly says this avatar doesn't support v3
         if resp.status_code in [400, 404]:
             try:
                 msg = resp.json().get("error", {}).get("message", "") or resp.text
             except Exception:
                 msg = resp.text
-            if "Avatar IV" in msg or "does not support" in msg or "not found" in msg.lower():
-                for fallback in fallback_avatars:
-                    if fallback == _avatar_id:
-                        continue
-                    payload["avatar_id"] = fallback
-                    resp = await client.post(f"{BASE}/v3/videos", json=payload, headers=_headers())
-                    if resp.status_code == 200:
-                        break
-                    await asyncio.sleep(0.5)
 
-        _raise_for_heygen_error(resp, "submit avatar video")
+            needs_fallback = (
+                "Avatar IV" in msg or
+                "does not support" in msg or
+                "not found" in msg.lower()
+            )
+
+            if needs_fallback:
+                print(f"Avatar {_avatar_id} rejected by HeyGen ({msg}), trying default fallback...")
+                fallback = os.getenv("HEYGEN_AVATAR_ID", "Abigail_standing_office_front")
+                if fallback == _avatar_id:
+                    fallback = "Abigail_standing_office_front"
+                payload["avatar_id"] = fallback
+                resp = await client.post(f"{BASE}/v3/videos", json=payload, headers=_headers())
+            # else: raise the actual error below so we know what went wrong
+
+        _raise_for_heygen_error(resp, f"submit avatar video (avatar_id={_avatar_id})")
         return resp.json()["data"]["video_id"]
 
 

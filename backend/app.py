@@ -453,11 +453,18 @@ class SaveVideoRequest(BaseModel):
 async def save_video_to_history(req: SaveVideoRequest):
     """Called by frontend after polling confirms video is ready. Saves to history."""
     try:
+        # Avoid duplicate saves — check if this video_id already saved
+        if req.video_id:
+            existing = get_broadcast_history(50)
+            for b in existing:
+                if b.get("video_id") == req.video_id:
+                    return {"broadcast_id": b["id"], "saved": False, "reason": "already_exists"}
+
         broadcast_id = save_broadcast(
             name=req.name, city=req.city, language=req.language,
             script=req.script, video_url=req.video_url,
             news_stories=req.news_stories, avatar_id=req.avatar_id,
-            topics=req.topics or []
+            topics=req.topics or [], video_id=req.video_id or ""
         )
         return {"broadcast_id": broadcast_id, "saved": True}
     except Exception as e:
