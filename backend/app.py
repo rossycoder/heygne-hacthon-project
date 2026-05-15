@@ -326,11 +326,6 @@ async def get_voices():
 
 @app.post("/api/upload/photo")
 async def upload_photo(file: UploadFile = File(...)):
-    """
-    Upload a user photo to HeyGen asset storage.
-    Returns { asset_id } to use in /api/generate with anchor_mode='photo'.
-    Accepts: image/jpeg, image/png, image/webp (max 10MB)
-    """
     allowed = {"image/jpeg", "image/png", "image/webp"}
     if file.content_type not in allowed:
         raise HTTPException(status_code=400, detail=f"Image must be JPEG, PNG or WebP. Got: {file.content_type}")
@@ -339,8 +334,11 @@ async def upload_photo(file: UploadFile = File(...)):
     if len(data) > 10 * 1024 * 1024:
         raise HTTPException(status_code=400, detail="Image must be under 10MB")
 
-    asset_id = await upload_asset(data, file.content_type, file.filename or "photo.jpg")
-    return {"asset_id": asset_id, "filename": file.filename}
+    try:
+        asset_id = await upload_asset(data, file.content_type, file.filename or "photo.jpg")
+        return {"asset_id": asset_id, "filename": file.filename}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Photo upload failed: {str(e)}")
 
 # ── File upload: voice ─────────────────────────────────────────────────────
 
@@ -364,11 +362,12 @@ async def upload_voice(
         raise HTTPException(status_code=400, detail="Audio must be under 5MB")
 
     # Upload audio file first
-    asset_id = await upload_asset(data, file.content_type, file.filename or "voice.mp3")
-
-    # Clone the voice — returns voice_id
-    voice_id = await clone_voice_from_asset(asset_id, voice_name, language)
-    return {"voice_id": voice_id, "voice_name": voice_name}
+    try:
+        asset_id = await upload_asset(data, file.content_type, file.filename or "voice.mp3")
+        voice_id = await clone_voice_from_asset(asset_id, voice_name, language)
+        return {"voice_id": voice_id, "voice_name": voice_name}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Voice upload failed: {str(e)}")
 
 # ── Other endpoints ────────────────────────────────────────────────────────
 
