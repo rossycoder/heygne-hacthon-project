@@ -40,6 +40,7 @@ async def list_videos(limit: int = 20) -> list:
 
 
 async def upload_asset(file_bytes, media_type, filename):
+    # HeyGen uses a separate upload domain
     upload_headers = {
         "x-api-key": os.getenv("HEYGEN_API_KEY", ""),
         "Content-Type": media_type,
@@ -47,7 +48,7 @@ async def upload_asset(file_bytes, media_type, filename):
     }
     async with httpx.AsyncClient(timeout=60.0) as client:
         resp = await client.post(
-            f"{BASE}/v2/asset",
+            "https://upload.heygen.com/v1/asset",
             content=file_bytes,
             headers=upload_headers,
         )
