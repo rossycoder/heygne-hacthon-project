@@ -189,10 +189,7 @@ async def generate_broadcast(req: BroadcastRequest):
     
     try:
         _INVALID_AVATARS = {"Anna_public_3", "Daisy-inskirt-20220818", "Tyler-incasualsuit-20220721",
-                            "Eric_public_pro1", "Susan_public_2_20240328", "Justin_public_pro2_20230714",
-                            "Sarah_professional", "Emma_business", "Sophia_casual",
-                            "Michael_suit", "James_blue", "David_casual",
-                            "Alex_formal", "Ryan_professional", "Priya_anchor", "Ahmed_news"}
+                            "Eric_public_pro1", "Susan_public_2_20240328", "Justin_public_pro2_20230714"}
 
         if req.anchor_mode == "photo" and req.image_asset_id:
             video_id = await submit_image_video(
@@ -203,6 +200,7 @@ async def generate_broadcast(req: BroadcastRequest):
             )
         else:
             safe_avatar_id = req.avatar_id if req.avatar_id and req.avatar_id not in _INVALID_AVATARS else None
+            print(f"[AVATAR DEBUG] requested={req.avatar_id!r} → sending={safe_avatar_id!r}")
             video_id = await submit_avatar_video(
                 script=script,
                 language=language,
