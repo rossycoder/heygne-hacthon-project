@@ -1,0 +1,56 @@
+.navbar {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 2rem;
+  height: 62px;
+  background: rgba(12, 12, 22, 0.96);
+  border-bottom: 1px solid var(--glass-border);
+  box-shadow: 0 1px 20px rgba(0,0,0,0.5);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+}
+
+.navbar__logo {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 1.25rem;
+  font-weight: 800;
+  letter-spacing: -0.5px;
+}
+.navbar__icon { font-size: 1.4rem; }
+.navbar__ai   { color: var(--red); }
+
+.navbar__live {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: rgba(226,75,74,.12);
+  border: 1px solid rgba(226,75,74,.3);
+  padding: 0.3rem 0.8rem;
+  border-radius: 999px;
+}
+
+.live-dot {
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  background: var(--red);
+  box-shadow: 0 0 8px var(--red);
+  animation: pulse-dot 1.4s ease-in-out infinite;
+}
+
+.live-label {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--red);
+  letter-spacing: 1.5px;
+}
+
+@keyframes pulse-dot {
+  0%, 100% { box-shadow: 0 0 6px var(--red); transform: scale(1); }
+  50%       { box-shadow: 0 0 14px var(--red); transform: scale(1.3); }
+}

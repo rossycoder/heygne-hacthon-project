@@ -1,0 +1,98 @@
+.share-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  padding: 0.8rem 1rem;
+  background: rgba(255,255,255,.03);
+  border: 1px solid rgba(255,255,255,.08);
+  border-radius: 12px;
+}
+
+.share-bar__label {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #606078;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  white-space: nowrap;
+}
+
+.share-bar__btns {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.share-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  background: rgba(255,255,255,.05);
+  border: 1px solid rgba(255,255,255,.1);
+  color: #a0a0be;
+  border-radius: 8px;
+  padding: 0.38rem 0.75rem;
+  font-size: 0.78rem;
+  font-weight: 500;
+  text-decoration: none;
+  cursor: pointer;
+  transition: all .2s;
+  font-family: inherit;
+}
+
+.share-btn:hover {
+  background: color-mix(in srgb, var(--c, #E24B4A) 15%, transparent);
+  border-color: color-mix(in srgb, var(--c, #E24B4A) 50%, transparent);
+  color: #eeeef5;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0,0,0,.3);
+}
+
+.share-btn__label { font-size: 0.75rem; }
+
+.share-btn--copy { --c: #E24B4A; }
+.share-btn--copy:hover { background: rgba(226,75,74,.15); border-color: rgba(226,75,74,.4); }
+
+.share-btn--copied {
+  background: rgba(74,222,128,.12) !important;
+  border-color: rgba(74,222,128,.3) !important;
+  color: #4ade80 !important;
+}
+
+.share-btn--native { --c: #8b5cf6; }
+
+.share-bar__tip {
+  width: 100%;
+  font-size: 0.72rem;
+  color: #606078;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  margin-top: 0.25rem;
+}
+
+.share-bar__dl-btn {
+  background: rgba(226,75,74,.12);
+  border: 1px solid rgba(226,75,74,.3);
+  color: #ff8080;
+  border-radius: 6px;
+  padding: 0.25rem 0.65rem;
+  font-size: 0.72rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all .2s;
+  font-family: inherit;
+  white-space: nowrap;
+}
+
+.share-bar__dl-btn:hover:not(:disabled) {
+  background: rgba(226,75,74,.22);
+  color: #ffaaaa;
+}
+
+.share-bar__dl-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}

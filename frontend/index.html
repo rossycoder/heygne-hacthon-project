@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>NewsGen AI — Your Personal Anchor</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="container">
+    <header>
+      <div class="logo">📡 NewsGen AI</div>
+      <p class="tagline">Your name. Your city. Your language. Your anchor.</p>
+    </header>
+
+    <main>
+      <form id="broadcastForm">
+        <div class="field">
+          <label for="name">Your Name</label>
+          <input type="text" id="name" placeholder="e.g. Rozeena" required />
+        </div>
+        <div class="field">
+          <label for="city">Your City</label>
+          <input type="text" id="city" placeholder="e.g. Azad Kashmir" required />
+        </div>
+        <div class="field">
+          <label for="language">Language</label>
+          <select id="language">
+            <option value="English">English</option>
+            <option value="Urdu">Urdu</option>
+            <option value="Arabic">Arabic</option>
+            <option value="Spanish">Spanish</option>
+            <option value="French">French</option>
+            <option value="Hindi">Hindi</option>
+            <option value="Chinese">Chinese</option>
+            <option value="German">German</option>
+            <option value="Portuguese">Portuguese</option>
+            <option value="Russian">Russian</option>
+          </select>
+        </div>
+        <button type="submit" id="generateBtn">
+          <span id="btnText">Generate My Broadcast</span>
+          <span id="btnLoader" class="hidden">⏳ Generating...</span>
+        </button>
+      </form>
+
+      <div id="result" class="hidden">
+        <div class="script-box">
+          <h3>📝 Your Script</h3>
+          <p id="scriptText"></p>
+        </div>
+        <div class="video-box">
+          <h3>🎬 Your Broadcast</h3>
+          <video id="broadcastVideo" controls playsinline></video>
+          <a id="downloadLink" href="#" download>⬇ Download Video</a>
+        </div>
+      </div>
+
+      <div id="errorBox" class="hidden error">
+        <p id="errorText"></p>
+      </div>
+    </main>
+
+    <footer>
+      <p>Powered by Claude AI &amp; HeyGen Avatars</p>
+    </footer>
+  </div>
+  <script src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,26 @@
+services:
+  - type: web
+    name: newsgen-ai-backend
+    runtime: python
+    rootDir: backend
+    buildCommand: pip install -r ../requirements.txt
+    startCommand: uvicorn app:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.0
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: GROQ_API_KEY
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: HEYGEN_API_KEY
+        sync: false
+      - key: GNEWS_API_KEY
+        sync: false
+      - key: AI_PROVIDER
+        value: groq
+      - key: HEYGEN_USE_LIVE_AVATARS
+        value: "true"
