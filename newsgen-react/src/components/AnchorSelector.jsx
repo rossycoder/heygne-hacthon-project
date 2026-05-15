@@ -1,6 +1,9 @@
 import { useState, useRef, useEffect } from 'react'
 import './AnchorSel.css'
 
+// Direct backend URL for file uploads (multipart doesn't work through Vercel proxy)
+const API_BASE = import.meta.env.VITE_API_URL || '/api'
+
 const TABS = [
   { id: 'avatar', label: '🎭 HeyGen Avatar' },
   { id: 'photo',  label: '🤳 My Photo'      },
@@ -50,7 +53,7 @@ export default function AnchorSelector({ onAnchorChange }) {
   useEffect(() => {
     if (tab !== 'avatar' || avatarsLoaded) return
     setAvatarLoad(true)
-    fetch('/api/avatars')
+    fetch(`${API_BASE}/avatars`)
       .then(r => r.json())
       .then(d => {
         const raw = d.avatars || []
@@ -71,7 +74,7 @@ export default function AnchorSelector({ onAnchorChange }) {
   // Load voices for voice picker
   useEffect(() => {
     if (!showVoicePicker || voices.length > 0) return
-    fetch('/api/voices')
+    fetch(`${API_BASE}/voices`)
       .then(r => r.json())
       .then(d => setVoices(d.voices || []))
       .catch(() => {})
@@ -129,7 +132,7 @@ export default function AnchorSelector({ onAnchorChange }) {
     try {
       const fd = new FormData()
       fd.append('file', file)
-      const res = await fetch('/api/upload/photo', { method: 'POST', body: fd })
+      const res = await fetch(`${API_BASE}/upload/photo`, { method: 'POST', body: fd })
       if (!res.ok) { const err = await res.json(); throw new Error(err.detail) }
       setPhotoAssetId((await res.json()).asset_id)
     } catch (err) {
@@ -147,7 +150,7 @@ export default function AnchorSelector({ onAnchorChange }) {
       fd.append('file', file)
       fd.append('voice_name', voiceName)
       fd.append('language', 'en')
-      const res = await fetch('/api/upload/voice', { method: 'POST', body: fd })
+      const res = await fetch(`${API_BASE}/upload/voice`, { method: 'POST', body: fd })
       if (!res.ok) { const err = await res.json(); throw new Error(err.detail) }
       setVoiceId((await res.json()).voice_id)
     } catch (err) {
