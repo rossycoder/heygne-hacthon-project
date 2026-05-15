@@ -47,7 +47,7 @@ async def upload_asset(file_bytes, media_type, filename):
     }
     async with httpx.AsyncClient(timeout=60.0) as client:
         resp = await client.post(
-            f"{BASE}/v1/asset",
+            f"{BASE}/v2/asset",
             content=file_bytes,
             headers=upload_headers,
         )
