@@ -207,6 +207,7 @@ async def generate_broadcast(req: BroadcastRequest):
                 avatar_id=safe_avatar_id,
                 voice_id=req.voice_id,
                 burn_captions=req.burn_captions,
+                news_stories=news_stories,
             )
 
         await update_progress(session_id, "video", 70, "Video submitted! Rendering in progress...")
