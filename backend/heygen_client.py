@@ -255,42 +255,28 @@ async def get_video_status(video_id: str) -> dict:
 
 
 async def submit_avatar_video(script, language, avatar_id=None, voice_id=None, burn_captions=False, news_stories=None) -> str:
-    """Submit video to HeyGen and return video_id immediately (no polling).
-    If news_stories have image_url, builds a multi-scene video with news images as background.
+    """Submit video to HeyGen v3 and return video_id immediately (no polling).
+    Note: v3 does not support multi-scene. Single scene with burn_captions for subtitles.
     """
     _avatar_id = avatar_id or os.getenv("HEYGEN_AVATAR_ID", "Abigail_standing_office_front")
     _voice_id  = voice_id or ""
 
-    # Split script into per-story segments for scenes
-    scenes = _build_scenes(script, news_stories, _avatar_id, _voice_id, burn_captions)
-
-    if scenes and len(scenes) > 1:
-        payload = {
-            "title": "NewsGen Broadcast",
-            "scenes": scenes,
-            "aspect_ratio": "16:9",
-            "resolution": "720p",
-        }
-    else:
-        # Single scene fallback
-        payload = {
-            "type": "avatar",
-            "title": "NewsGen Broadcast",
-            "avatar_id": _avatar_id,
-            "script": script,
-            "voice_id": _voice_id,
-            "voice_settings": {"speed": 1.1},
-            "resolution": "720p",
-            "aspect_ratio": "16:9",
-            "background": {"type": "color", "value": "#0d0d1a"},
-        }
-        if burn_captions:
-            payload["caption"] = {"file_format": "srt", "style": "default"}
+    payload = {
+        "type": "avatar",
+        "title": "NewsGen Broadcast",
+        "avatar_id": _avatar_id,
+        "script": script,
+        "voice_id": _voice_id,
+        "voice_settings": {"speed": 1.1},
+        "resolution": "720p",
+        "aspect_ratio": "16:9",
+        "background": {"type": "color", "value": "#0d0d1a"},
+        "caption": {"file_format": "srt", "style": "default"},  # Always burn subtitles
+    }
 
     async with httpx.AsyncClient(timeout=30.0) as client:
         resp = await client.post(f"{BASE}/v3/videos", json=payload, headers=_headers())
 
-        # Only fallback if HeyGen explicitly says this avatar doesn't support v3
         if resp.status_code in [400, 404]:
             try:
                 msg = resp.json().get("error", {}).get("message", "") or resp.text
@@ -308,110 +294,11 @@ async def submit_avatar_video(script, language, avatar_id=None, voice_id=None, b
                 fallback = os.getenv("HEYGEN_AVATAR_ID", "Abigail_standing_office_front")
                 if fallback == _avatar_id:
                     fallback = "Abigail_standing_office_front"
-                # Rebuild with fallback avatar
-                if scenes and len(scenes) > 1:
-                    for scene in payload.get("scenes", []):
-                        for char in scene.get("characters", []):
-                            if char.get("type") == "avatar":
-                                char["avatar_id"] = fallback
-                else:
-                    payload["avatar_id"] = fallback
+                payload["avatar_id"] = fallback
                 resp = await client.post(f"{BASE}/v3/videos", json=payload, headers=_headers())
 
         _raise_for_heygen_error(resp, f"submit avatar video (avatar_id={_avatar_id})")
         return resp.json()["data"]["video_id"]
-
-
-def _build_scenes(script: str, news_stories: list | None, avatar_id: str, voice_id: str, burn_captions: bool) -> list | None:
-    """
-    Build HeyGen v3 scenes array.
-    Each news story gets its own scene with the story image as background.
-    Avatar stays consistent across all scenes.
-    """
-    if not news_stories:
-        return None
-
-    # Only use stories that have image_url
-    stories_with_images = [s for s in news_stories if s.get("image_url")]
-    if not stories_with_images:
-        return None
-
-    # Split script into segments — one per story
-    # Simple split: divide script equally among stories
-    segments = _split_script(script, len(stories_with_images))
-    if not segments:
-        return None
-
-    scenes = []
-    for i, (story, segment) in enumerate(zip(stories_with_images, segments)):
-        if not segment.strip():
-            continue
-
-        scene = {
-            "background": {
-                "type": "image",
-                "url": story["image_url"],
-                "fit": "cover",
-            },
-            "characters": [
-                {
-                    "type": "avatar",
-                    "avatar_id": avatar_id,
-                    "scale": 0.6,
-                    "offset": {"x": 0.7, "y": 0.0},  # Avatar on right side
-                    "voice": {
-                        "type": "text",
-                        "input_text": segment,
-                        "voice_id": voice_id or "",
-                        "speed": 1.1,
-                    },
-                }
-            ],
-        }
-
-        # Add news headline as lower-third (real TV news style — bottom bar)
-        if story.get("headline"):
-            scene["elements"] = [
-                # Dark bar background
-                {
-                    "type": "text",
-                    "text": f"● {story.get('category', 'NEWS').upper()}  |  {story['headline']}",
-                    "style": {
-                        "font_family": "Arial",
-                        "font_size": 32,
-                        "font_color": "#ffffff",
-                        "background_color": "#cc0000",
-                        "bold": True,
-                        "text_align": "left",
-                        "padding": 16,
-                    },
-                    "position": {"x": 0.0, "y": 0.88},
-                    "width": 1.0,
-                }
-            ]
-
-        if burn_captions:
-            scene["caption"] = {"file_format": "srt", "style": "default"}
-
-        scenes.append(scene)
-
-    return scenes if len(scenes) > 1 else None
-
-
-def _split_script(script: str, n: int) -> list[str]:
-    """Split script into n roughly equal segments by sentences."""
-    import re
-    sentences = re.split(r'(?<=[.!?])\s+', script.strip())
-    if len(sentences) < n:
-        return []
-
-    per_segment = max(1, len(sentences) // n)
-    segments = []
-    for i in range(n):
-        start = i * per_segment
-        end   = start + per_segment if i < n - 1 else len(sentences)
-        segments.append(" ".join(sentences[start:end]))
-    return segments
 
 
 async def submit_image_video(script, image_asset_id, voice_id=None, burn_captions=False) -> str:
