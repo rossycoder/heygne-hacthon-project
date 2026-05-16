@@ -330,17 +330,25 @@ async def submit_avatar_video(script, language, avatar_id=None, voice_id=None, b
         "- Show each story's headline as a lower-third text bar at the bottom\n"
         "- Use the attached news images as background visuals for each story\n"
         "- Avatar on the right side, news image fills the background\n"
+        "- Add the attached background music as soft news intro/background music (low volume, do not overpower the anchor voice)\n"
         "- Burn captions/subtitles into the video\n"
         "- Orientation: landscape 16:9"
     )
 
-    # Attach news images
+    # News background music — royalty-free, publicly accessible
+    # BBC-style news intro feel (Pixabay free license)
+    NEWS_MUSIC_URL = "https://cdn.pixabay.com/download/audio/2022/03/15/audio_8cb749d577.mp3"
+
+    # Attach news images + background music
     files = []
     if news_stories:
         for s in news_stories:
             img = s.get("image_url", "")
             if img and img.startswith("http"):
                 files.append({"type": "url", "url": img})
+
+    # Add music as last file
+    files.append({"type": "url", "url": NEWS_MUSIC_URL})
 
     payload = {"prompt": prompt, "orientation": "landscape"}
     if _avatar_id:
