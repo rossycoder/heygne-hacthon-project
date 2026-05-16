@@ -237,7 +237,15 @@ async def create_image_video(script, image_asset_id, voice_id=None, burn_caption
 
 
 async def get_video_status(video_id: str) -> dict:
-    """Check HeyGen video status. Returns { status, video_url, error }"""
+    """
+    Check video status. Handles both:
+    - Regular video_id  → GET /v1/video_status.get
+    - sess_{session_id} → resolve Video Agent session → poll video
+    """
+    if video_id.startswith("sess_"):
+        session_id = video_id[5:]
+        return await _get_agent_session_status(session_id)
+
     async with httpx.AsyncClient(timeout=15.0) as client:
         resp = await client.get(
             f"{BASE}/v1/video_status.get",
@@ -248,57 +256,107 @@ async def get_video_status(video_id: str) -> dict:
         data = resp.json()["data"]
         return {
             "video_id":  video_id,
-            "status":    data.get("status", "processing"),   # processing | completed | failed
+            "status":    data.get("status", "processing"),
             "video_url": data.get("video_url", ""),
             "error":     data.get("error", ""),
         }
 
 
-async def submit_avatar_video(script, language, avatar_id=None, voice_id=None, burn_captions=False, news_stories=None) -> str:
-    """Submit video to HeyGen v3 and return video_id immediately (no polling).
-    Note: v3 does not support multi-scene. Single scene with burn_captions for subtitles.
-    """
-    _avatar_id = avatar_id or os.getenv("HEYGEN_AVATAR_ID", "Abigail_standing_office_front")
-    _voice_id  = voice_id or ""
+async def _get_agent_session_status(session_id: str) -> dict:
+    """Poll Video Agent session → once video_id assigned, poll video status."""
+    async with httpx.AsyncClient(timeout=15.0) as client:
+        resp = await client.get(
+            f"{BASE}/v3/video-agents/{session_id}",
+            headers=_headers(),
+        )
+        if resp.status_code != 200:
+            return {"video_id": f"sess_{session_id}", "status": "processing", "video_url": "", "error": ""}
 
-    payload = {
-        "type": "avatar",
-        "title": "NewsGen Broadcast",
-        "avatar_id": _avatar_id,
-        "script": script,
-        "voice_id": _voice_id,
-        "voice_settings": {"speed": 1.1},
-        "resolution": "720p",
-        "aspect_ratio": "16:9",
-        "background": {"type": "color", "value": "#0d0d1a"},
-        "caption": {"file_format": "srt", "style": "default"},  # Always burn subtitles
-    }
+        data     = resp.json().get("data", {})
+        status   = data.get("status", "thinking")
+        video_id = data.get("video_id")
+
+        print(f"[VIDEO AGENT] session={session_id} status={status} video_id={video_id}")
+
+        if status == "failed":
+            return {
+                "video_id": f"sess_{session_id}", "status": "failed",
+                "video_url": "", "error": data.get("failure_message", "Video Agent failed"),
+            }
+
+        if not video_id:
+            return {"video_id": f"sess_{session_id}", "status": "processing", "video_url": "", "error": ""}
+
+        # video_id assigned — poll the actual video
+        resp2 = await client.get(f"{BASE}/v3/videos/{video_id}", headers=_headers())
+        if resp2.status_code != 200:
+            return {"video_id": video_id, "status": "processing", "video_url": "", "error": ""}
+
+        vdata   = resp2.json().get("data", {})
+        vstatus = vdata.get("status", "processing")
+
+        if vstatus == "completed":
+            url = vdata.get("captioned_video_url") or vdata.get("video_url", "")
+            return {"video_id": video_id, "status": "completed", "video_url": url, "error": ""}
+        elif vstatus == "failed":
+            return {"video_id": video_id, "status": "failed", "video_url": "",
+                    "error": vdata.get("failure_message", "Video failed")}
+        else:
+            return {"video_id": video_id, "status": "processing", "video_url": "", "error": ""}
+
+
+async def submit_avatar_video(script, language, avatar_id=None, voice_id=None, burn_captions=False, news_stories=None) -> str:
+    """
+    Submit video using HeyGen Video Agent API (/v3/video-agents).
+    Passes news images + script so agent creates a proper multi-scene
+    news broadcast with lower-thirds, visuals, and captions.
+    Returns 'sess_{session_id}' — get_video_status() handles resolution.
+    """
+    _avatar_id = avatar_id or os.getenv("HEYGEN_AVATAR_ID", "")
+    _voice_id  = voice_id  or os.getenv("HEYGEN_VOICE_ID", "")
+
+    # Build headlines list for the prompt
+    headlines = ""
+    if news_stories:
+        for i, s in enumerate(news_stories, 1):
+            headlines += f"\n  Story {i} [{s.get('category','NEWS').upper()}]: {s.get('headline','')}"
+
+    prompt = (
+        f"Create a professional TV news broadcast video in {language}.\n\n"
+        f"Read this anchor script exactly, word for word:\n{script}\n\n"
+        f"News stories covered:{headlines}\n\n"
+        "Requirements:\n"
+        "- Style: professional TV news broadcast\n"
+        "- Show each story's headline as a lower-third text bar at the bottom\n"
+        "- Use the attached news images as background visuals for each story\n"
+        "- Avatar on the right side, news image fills the background\n"
+        "- Burn captions/subtitles into the video\n"
+        "- Orientation: landscape 16:9"
+    )
+
+    # Attach news images
+    files = []
+    if news_stories:
+        for s in news_stories:
+            img = s.get("image_url", "")
+            if img and img.startswith("http"):
+                files.append({"type": "url", "url": img})
+
+    payload = {"prompt": prompt, "orientation": "landscape"}
+    if _avatar_id:
+        payload["avatar_id"] = _avatar_id
+    if _voice_id:
+        payload["voice_id"] = _voice_id
+    if files:
+        payload["files"] = files[:10]
 
     async with httpx.AsyncClient(timeout=30.0) as client:
-        resp = await client.post(f"{BASE}/v3/videos", json=payload, headers=_headers())
-
-        if resp.status_code in [400, 404]:
-            try:
-                msg = resp.json().get("error", {}).get("message", "") or resp.text
-            except Exception:
-                msg = resp.text
-
-            needs_fallback = (
-                "Avatar IV" in msg or
-                "does not support" in msg or
-                "not found" in msg.lower()
-            )
-
-            if needs_fallback:
-                print(f"Avatar {_avatar_id} rejected by HeyGen ({msg}), trying default fallback...")
-                fallback = os.getenv("HEYGEN_AVATAR_ID", "Abigail_standing_office_front")
-                if fallback == _avatar_id:
-                    fallback = "Abigail_standing_office_front"
-                payload["avatar_id"] = fallback
-                resp = await client.post(f"{BASE}/v3/videos", json=payload, headers=_headers())
-
-        _raise_for_heygen_error(resp, f"submit avatar video (avatar_id={_avatar_id})")
-        return resp.json()["data"]["video_id"]
+        resp = await client.post(f"{BASE}/v3/video-agents", json=payload, headers=_headers())
+        _raise_for_heygen_error(resp, "submit video agent")
+        data       = resp.json()["data"]
+        session_id = data["session_id"]
+        print(f"[VIDEO AGENT] submitted session_id={session_id} status={data.get('status')}")
+        return f"sess_{session_id}"
 
 
 async def submit_image_video(script, image_asset_id, voice_id=None, burn_captions=False) -> str:
