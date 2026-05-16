@@ -369,20 +369,24 @@ def _build_scenes(script: str, news_stories: list | None, avatar_id: str, voice_
             ],
         }
 
-        # Add news headline overlay as text
+        # Add news headline as lower-third (real TV news style — bottom bar)
         if story.get("headline"):
             scene["elements"] = [
+                # Dark bar background
                 {
                     "type": "text",
-                    "text": story["headline"],
+                    "text": f"● {story.get('category', 'NEWS').upper()}  |  {story['headline']}",
                     "style": {
-                        "font_size": 28,
+                        "font_family": "Arial",
+                        "font_size": 32,
                         "font_color": "#ffffff",
-                        "background_color": "#00000088",
+                        "background_color": "#cc0000",
                         "bold": True,
+                        "text_align": "left",
+                        "padding": 16,
                     },
-                    "position": {"x": 0.05, "y": 0.82},
-                    "width": 0.6,
+                    "position": {"x": 0.0, "y": 0.88},
+                    "width": 1.0,
                 }
             ]
 
